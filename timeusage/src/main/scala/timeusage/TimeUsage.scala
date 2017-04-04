@@ -31,15 +31,14 @@ object TimeUsage {
     val (primaryNeedsColumns, workColumns, otherColumns) = classifiedColumns(columns)
     val summaryDf = timeUsageSummary(primaryNeedsColumns, workColumns, otherColumns, initDf)
     //summaryDf.show()
-    val finalDf = timeUsageGrouped(summaryDf)
-    finalDf.show()
+    //val finalDf = timeUsageGrouped(summaryDf)
+    //finalDf.show()
     //val sqlDf = timeUsageGroupedSql(summaryDf)
     //println("show sqldf")
     //sqlDf.show()
-    //val ds = timeUsageGroupedTyped(timeUsageSummaryTyped(summaryDf))
-    //println("show ds")
-
-    //ds.show()
+    val ds = timeUsageGroupedTyped(timeUsageSummaryTyped(summaryDf))
+    println("show ds")
+    ds.show()
   }
 
   /** @return The read DataFrame along with its column names. */
@@ -196,7 +195,9 @@ object TimeUsage {
    * Finally, the resulting DataFrame should be sorted by working status, sex and age.
    */
   def timeUsageGrouped(summed: DataFrame): DataFrame = {
-    summed.groupBy($"working", $"sex", $"age").avg("primaryNeeds", "work", "other").orderBy("working", "sex", "age")
+    val grouped = summed.groupBy($"working", $"sex", $"age").avg("primaryNeeds", "work", "other").orderBy("working", "sex", "age")
+    grouped.toDF("working", "sex", "age", "primaryNeeds", "work", "other").
+    select($"working", $"sex", $"age", round($"primaryNeeds", 1), round($"work", 1), round($"other", 1))
   }
 
   /**
@@ -215,7 +216,7 @@ object TimeUsage {
    */
   def timeUsageGroupedSqlQuery(viewName: String): String =
     s"""
-      select working, sex, age, avg(primaryNeeds), avg(work), avg(other)
+      select working, sex, age, round(avg(primaryNeeds), 1), round(avg(work), 1), round(avg(other), 1)
       from $viewName
       group by working, sex, age
       order by working, sex, age
@@ -232,12 +233,12 @@ object TimeUsage {
     //implicit val rowEncoder = Encoder.product[TimeUsageRow]
     timeUsageSummaryDf.map(row => {
       TimeUsageRow(
-        row.getAs[String]("working"),
-        row.getAs[String]("sex"),
-        row.getAs[String]("age"),
-        row.getAs[Double]("primaryNeeds"),
-        row.getAs[Double]("work"),
-        row.getAs[Double]("other"))
+        row.getAs[String](0),
+        row.getAs[String](1),
+        row.getAs[String](2),
+        row.getAs[Double](3),
+        row.getAs[Double](4),
+        row.getAs[Double](5))
     })
   }
 
@@ -261,7 +262,10 @@ object TimeUsage {
         map {
           case ((working, sex, age), pn, wk, ot) => TimeUsageRow(working, sex, age, pn, wk, ot)
         }
-    val df = grouped.toDF("working", "sex", "age", "primaryNeeds", "work", "other").orderBy("working", "sex", "age")
+    val df = grouped.toDF("working", "sex", "age", "primaryNeeds", "work", "other").
+      select($"working", $"sex", $"age", round($"primaryNeeds", 1), round($"work", 1), round($"other", 1)).
+      orderBy("working", "sex", "age")
+      
     timeUsageSummaryTyped(df)
   }
 }
